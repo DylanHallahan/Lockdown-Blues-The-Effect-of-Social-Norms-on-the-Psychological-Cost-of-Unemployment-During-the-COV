@@ -1,0 +1,301 @@
+---
+title: "NHIS DATA"
+output: html_document
+---
+
+```{r}
+
+library(dplyr)
+install.packages("tidyverse")
+library(ggplot2)
+library(latticeExtra)
+
+
+
+
+```
+
+```{r}
+
+
+NHIS = nhis_00004
+
+NHIS = select(NHIS, YEAR, EMPSTAT, AEFFORT, ARESTLESS, AHOPELESS, ANERVOUS, ASAD, AWORTHLESS, SEX, AGE)
+
+NHIS = NHIS[!(NHIS$AEFFORT=="6" | NHIS$AEFFORT=="7" | NHIS$AEFFORT=="8" | NHIS$AEFFORT=="9"),]
+
+NHIS = NHIS[!(NHIS$ARESTLESS=="6" | NHIS$ARESTLESS=="7" | NHIS$ARESTLESS=="8" | NHIS$ARESTLESS=="9"),]
+
+NHIS = NHIS[!(NHIS$ANERVOUS=="6" | NHIS$ANERVOUS=="7" | NHIS$ANERVOUS=="8" | NHIS$ANERVOUS=="9"),]
+
+NHIS = NHIS[!(NHIS$ASAD=="6" | NHIS$ASAD=="7" | NHIS$ASAD=="8" | NHIS$ASAD=="9"),]
+
+NHIS = NHIS[!(NHIS$AHOPELESS=="6" | NHIS$AHOPELESS=="7" | NHIS$AHOPELESS=="8" | NHIS$AHOPELESS=="9"),]
+
+NHIS = NHIS[!(NHIS$AWORTHLESS=="6" | NHIS$AWORTHLESS=="7" | NHIS$AWORTHLESS=="8" | NHIS$AWORTHLESS=="9"),]
+```
+
+
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(latticeExtra)
+library(png)
+
+
+"remove out of labor force"
+
+NHIS = NHIS[!(NHIS$EMPSTAT=="220"),] 
+
+NHIS = NHIS[!(NHIS$EMPSTAT=="112" | NHIS$EMPSTAT=="120" | NHIS$EMPSTAT=="997" | NHIS$EMPSTAT=="998" | NHIS$EMPSTAT=="999"),]
+
+NHIS$WB <- rowMeans(NHIS[ , c(3,4,5,6,7,8)], na.rm=TRUE)
+
+NHIS$WB = abs((as.numeric(as.character(NHIS$WB))/ 3) -1)
+
+
+ggplot(NHIS, aes(x=as.factor(EMPSTAT), y=WB)) + 
+    geom_boxplot(fill="slateblue", alpha=0.2) +
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+               width = 0.75, size = 1, linetype = "solid")
+
+uemp = NHIS[!(NHIS$EMPSTAT=="111"),]
+
+summary(emp)
+
+emp = NHIS[!(NHIS$EMPSTAT=="200"),]
+
+uemp = aggregate(uemp[, 11], list(uemp$YEAR), mean)
+
+emp = aggregate(emp[, 11], list(emp$YEAR), mean)
+
+ggplot(uemp, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+ggplot(emp, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+memp = merge(uemp, emp, by="Group.1")
+
+memp$diff <- (memp$WB.y - memp$WB.x)
+
+colnames(memp)[1] <- "YEAR"
+
+ggplot(uemp, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+
+
+
+uemp2 = NHIS[!(NHIS$EMPSTAT=="111"),]
+
+emp2 = NHIS[!(NHIS$EMPSTAT=="200"),]
+
+uemp2 = count(uemp2, YEAR)
+
+emp2 = count(emp2, YEAR)
+
+memp2 = merge(uemp2, emp2, by="YEAR")
+
+"should be memp 2"
+
+memp2$Rate <- (memp2$n.x / memp2$n.y)
+
+colnames(memp)[1] <- "YEAR"
+
+mempcorr = merge(memp, memp2, by="YEAR")
+
+res <- cor.test(mempcorr$Rate, mempcorr$diff, 
+                    method = "pearson")
+res
+
+colnames(emp)[1] <- "YEAR"
+
+colnames(uemp)[1] <- "YEAR"
+
+emp = merge(emp, memp2, by="YEAR")
+
+uemp = merge(uemp, memp2, by="YEAR")
+
+
+library(readxl)
+
+
+plot1 = ggplot(mempcorr, aes(x=Rate, y=diff)) + 
+  geom_point(col="Black", size=3, shape=1) +
+  geom_smooth(method=lm, se=FALSE, col='Black')+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+     labs(y="WB Difference", x = "National Unemployment Rate") +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=12))
+
+print(plot1)
+
+ggsave("plot1.png", device = "png",
+       width = 6, height = 4, units = "in", dpi = 1200)
+
+plot2 = ggplot(uemp, aes(x=Rate, y=WB)) + 
+  geom_point(col='#FF3333', size=3, shape=1) +
+  geom_point(data=emp, col='#0066CC', size=3, shape=1) +
+  geom_smooth(data=emp, method=lm, se=FALSE, col='Black') +
+  geom_smooth(method=lm, se=FALSE, col='Black')+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  labs(y="Well-Being", x = "National Unemployment Rate") +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=12))
+
+print(plot2)
+
+ggsave("plot2.png", device = "png",
+       width = 6, height = 4, units = "in", dpi = 1200)
+
+png("plot3.png", width=6, height=4, units = "in", res = 1200)
+
+obj1 <- xyplot(diff ~ YEAR, mempcorr, type = "l", lwd = 2, 
+               col = '#0066CC', col.lab = "black", 
+               par.settings = list(superpose.line = list(col=c('#FF3333', '#0066CC'))),
+               scales = list(x=list(cex=1.2), 
+                             y=list(cex=1.2)), 
+               xlab = list("Year", fontsize = 14), 
+               ylab = list("WB Difference", fontsize = 14), ylab.right = list("National Unemployment Rate", fontsize = 14))
+
+obj2 <- xyplot(Rate ~ YEAR, mempcorr, type = "l", lwd = 2, col = '#FF3333')
+
+plot3 = doubleYScale(obj1, obj2, col = c('#FF3333','#0066CC'), text = c("WB Difference", "National Unemployment Rate"), add.ylab2 = F)
+
+print(plot3)
+
+dev.off()
+
+
+
+png("plot4.png", width=6, height=4, units = "in", res = 1200)
+
+obj1 <- xyplot(WB.x ~ YEAR, mempcorr, type = "l", lwd = 2, 
+               col = '#0066CC', col.lab = "black", 
+               par.settings = list(superpose.line = list(col=c('#FF3333', '#0066CC'))),
+               scales = list(x=list(cex=1.2), 
+                             y=list(cex=1.2)), 
+               xlab = list("Year", fontsize = 14), 
+               ylab = list("WB Unemployed", fontsize = 14, col="black"), ylab.right = list("WB Employed", fontsize = 14, col="black"))
+
+obj2 <- xyplot(WB.y ~ YEAR, mempcorr, type = "l", lwd = 2, col = '#FF3333')
+
+plot4 = doubleYScale(obj1, obj2, col = c('#FF3333', '#0066CC'), text = c("WB Unemployed", "WB Employed"), add.ylab2 = F)
+
+print(plot4)
+
+dev.off()
+
+
+
+
+
+```
+
+
+```{r}
+library(stargazer)
+
+library(sandwich)
+library(interactions)
+library(jtools)
+library(ggplot2)
+
+
+dfreg2 = merge(memp2, NHIS, by="YEAR")
+
+dfreg2$emp <- ifelse(dfreg2$EMPSTAT %in% c(200), 1, 0)
+
+dfreg2$Gender <- ifelse(dfreg2$SEX %in% c(1), 0, 1)
+
+lm0 = lm(WB ~ emp, data = dfreg2)
+
+summary(lm0)
+
+lm1 = lm(WB ~ Rate * emp, data = dfreg2)
+
+summary(lm1)
+
+lm2 = lm(WB ~ Rate*emp + Gender*emp, data = dfreg2)
+
+summary(lm2)
+
+lm4 = lm(WB ~ Gender * Rate * emp + AGE, data = dfreg2) 
+
+summary(lm4)
+
+lm5 = lm(WB ~ Gender * Rate * emp + emp * AGE, data = dfreg2) 
+
+summary(lm5)
+
+dfreg2$Gender = factor(dfreg2$Gender, labels = c("Female", "Male"))
+
+dfreg2$emp = factor(dfreg2$emp, labels = c("Employed", "Unemployed"))
+
+lm6 = lm(WB ~ Gender * Rate * emp + emp * AGE, data = dfreg2) 
+
+plot5 = probe_interaction(lm6, pred = Rate, modx = emp, mod2 = Gender, x.label = "Unemployment Rate", y.label = "Well-being", legend.main = "")
+          
+print(plot5)           
+           
+ggsave("plot5.png", device = "png",
+       width = 6, height = 4, units = "in", dpi = 1200)
+
+
+
+stargazer(lm0, lm1, lm2, lm4, lm5, title="Results", align=TRUE,  no.space=TRUE, omit.stat=c("f", "ser"), column.sep.width = "-15pt",font.size = "small")
+
+
+
+```
+
+```{r}
+
+df = dfreg2
+
+emp = df[!(df$emp=="1"),]
+
+empM = emp[!(emp$SEX=="2"),]
+
+empF = emp[!(emp$SEX=="1"),]
+
+uemp = df[!(df$covidue=="0"),]
+
+uempM = uemp[!(uemp$SEX=="2"),]
+
+uempF = uemp[!(uemp$SEX=="1"),]
+
+uempM = aggregate(uempM[, 11], list(uempM$WEEK), mean)
+
+empF = aggregate(empF[, 11], list(empF$WEEK), mean)
+
+uempF = aggregate(uempF[, 11], list(uempF$WEEK), mean)
+
+empM = aggregate(empM[, 11], list(empM$WEEK), mean)
+
+ggplot(uempF, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+ggplot(uempM, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+mempF = merge(uempF, empF, by="Group.1")
+
+mempM = merge(uempM, empM, by="Group.1")
+
+mempF$diffF <- (mempF$WB.x - mempF$WB.y)
+
+mempM$diffM <- (mempM$WB.x - mempM$WB.y)
+
+
+```
+
