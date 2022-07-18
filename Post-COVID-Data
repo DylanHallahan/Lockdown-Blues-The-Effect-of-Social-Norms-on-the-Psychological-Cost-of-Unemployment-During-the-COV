@@ -1,0 +1,472 @@
+---
+title: "pulse"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+install.packages("tidyverse")
+library(ggplot2)
+
+pulse = pulse2022_puf_41
+
+df = select(pulse, ANYWORK, ANXIOUS, WORRY, DOWN, INTEREST, RSNNOWRKRV)
+
+df = df[!(df$ANXIOUS=="-99" | df$ANXIOUS=="-88" | df$DOWN=="-99" | df$DOWN=="-88" | df$WORRY=="-99"| df$WORRY=="-88" | df$ANYWORK=="-88" | df$ANYWORK=="-99" | df$INTEREST=="-88" | df$INTEREST=="-99"),]
+
+df$WB <- rowMeans(df[ , c(2,3,4,5)], na.rm=TRUE)
+
+dfnowork = df[!(df$RSNNOWRKRV=="-99" | df$RSNNOWRKRV=="-88"),]
+
+df$covidue <- ifelse(df$RSNNOWRKRV == c(5,8,9,10,11), 1, 0)
+
+tapply(dfnowork$WB, dfnowork$RSNNOWRKRV, summary)
+
+tapply(df$WB, df$covidue, summary)
+
+t.test(df$WB, mu = 2.434)
+
+df %>% count(RSNNOWRKRV)
+
+ggplot(dfnowork, aes(x=as.factor(RSNNOWRKRV), y=WB)) + 
+    geom_boxplot(fill="slateblue", alpha=0.2) +
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+               width = 0.75, size = 1, linetype = "solid")
+
+ggplot(dfnowork, aes(x=as.factor(RSNNOWRKRV), y=WB)) + 
+    geom_boxplot(fill="slateblue", alpha=0.2)
+
+
+ggplot(df, aes(x=as.factor(covidue), y=WB)) + 
+    geom_boxplot(fill="slateblue", alpha=0.2)
+
+
+
+
+```
+
+
+```{r}
+
+library(readr)
+library(dplyr)
+files = list.files(pattern="*.csv")
+tbl = lapply(files, read_csv) %>% bind_rows()
+
+```
+
+```{r}
+library(ggplot2)
+library(latticeExtra)
+
+df = select(tbl, WEEK, ANYWORK, ANXIOUS, WORRY, DOWN, INTEREST, RSNNOWRKRV, RSNNOWRK, TBIRTH_YEAR)
+
+df = df[!(df$ANXIOUS=="-99" | df$ANXIOUS=="-88" | df$DOWN=="-99" | df$DOWN=="-88" | df$WORRY=="-99"| df$WORRY=="-88" | df$ANYWORK=="-88" | df$ANYWORK=="-99" | df$INTEREST=="-88" | df$INTEREST=="-99"),]
+
+df$WB <- rowMeans(df[ , c(2,3,4,5)], na.rm=TRUE)
+
+#normalize WB
+
+df$WB = abs(((as.numeric(as.character(df$WB)) -1)/ 3) -1)
+
+#sort covid unemployed
+
+df$covidue <- ifelse(df$RSNNOWRKRV %in% c(5,8,9,10,11) | df$RSNNOWRK %in% c(8,9,10,11), 1, 0)
+
+df$AGE = abs(df$TBIRTH_YEAR - 2022)
+
+#1 is unemploymed and 0 is employed
+
+#idk why 1 is 0 and 0 is 1
+
+emp = df[!(df$covidue=="1"),]
+
+uemp = df[!(df$covidue=="0"),]
+
+summary(emp)
+
+uemp = aggregate(uemp[, 10], list(uemp$WEEK), mean)
+
+emp = aggregate(emp[, 10], list(emp$WEEK), mean)
+
+ggplot(uemp, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+ggplot(emp, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+memp = merge(uemp, emp, by="Group.1")
+
+memp$diff <- (memp$WB.y - memp$WB.x)
+
+colnames(memp)[1] <- "WEEK"
+
+ggplot(memp, aes(x=WEEK, y=diff)) +
+  geom_line() + 
+  xlab("")
+
+
+
+
+uemp2 = df[!(df$covidue=="0"),]
+
+emp2 = df[!(df$covidue=="1"),]
+
+uemp2 = count(uemp2, WEEK)
+
+emp2 = count(emp2, WEEK)
+
+memp2 = merge(uemp2, emp2, by="WEEK")
+
+memp2$aggrate <- (memp2$n.x / memp2$n.y)
+
+ggplot(memp2, aes(x=WEEK, y=aggrate )) +
+  geom_line() + 
+  xlab("")
+
+colnames(memp)[1] <- "WEEK"
+
+mempcorr = merge(memp, memp2, by="WEEK")
+
+res <- cor.test(mempcorr$aggrate, mempcorr$diff, 
+                    method = "pearson")
+res
+
+library(readxl)
+
+#rename for merge
+
+colnames(emp)[1] <- "WEEK"
+
+colnames(uemp)[1] <- "WEEK"
+
+emp = merge(emp, memp2, by="WEEK")
+
+uemp = merge(uemp, memp2, by="WEEK")
+
+plot6 = ggplot(mempcorr, aes(x=aggrate, y=diff)) + 
+  geom_point(col='Black', size=3, shape=1) +
+  geom_smooth(method=lm, se=FALSE, col='Black')+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+     labs(y="WB Difference", x = "National Unemployment Rate") +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=12))
+
+print(plot6)
+
+ggsave("plot6.png", device = "png",
+       width = 6, height = 4, units = "in", dpi = 1200)
+
+plot7 = ggplot(uemp, aes(x=aggrate, y=WB)) + 
+  geom_point(col='#FF3333', size=3, shape=1) +
+  geom_point(data=emp, col='#0066CC', size=3, shape=1) +
+  geom_smooth(data=emp, method=lm, se=FALSE, col='Black') +
+  geom_smooth(method=lm, se=FALSE, col='Black')+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+  panel.background = element_blank(), axis.line = element_line(colour = "black")) +
+  labs(y="Well-Being", x = "National Unemployment Rate") +
+  theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=12))
+
+print(plot7)
+
+ggsave("plot7.png", device = "png",
+       width = 6, height = 4, units = "in", dpi = 1200)
+
+png("plot8.png", width=6, height=4, units = "in", res = 1200)
+
+obj1 <- xyplot(diff ~ WEEK, mempcorr, type = "l", lwd = 2, 
+               col = '#FF3333', col.lab = "black", 
+               par.settings = list(superpose.line = list(col=c('#FF3333', '#0066CC'))),
+               scales = list(x=list(cex=1.2), 
+                             y=list(cex=1.2)), 
+               xlab = list("Week", fontsize = 14), 
+               ylab = list("WB Difference", fontsize = 14), ylab.right = list("National Unemployment Rate", fontsize = 14))
+
+obj2 <- xyplot(aggrate ~ WEEK, mempcorr, type = "l", lwd = 2, col = '#0066CC')
+
+plot8 = doubleYScale(obj1, obj2, col = c('#FF3333', '#0066CC'), text = c("WB Difference", "National Unemployment Rate"), add.ylab2 = F)
+
+print(plot8)
+
+dev.off()
+
+
+
+png("plot9.png", width=6, height=4, units = "in", res = 1200)
+
+obj1 <- xyplot(WB.x ~ WEEK, mempcorr, type = "l", lwd = 2, 
+               col = '#FF3333', col.lab = "black", 
+               par.settings = list(superpose.line = list(col=c('#FF3333', '#0066CC'))),
+               scales = list(x=list(cex=1.2), 
+                             y=list(cex=1.2)), 
+               xlab = list("Week", fontsize = 14), 
+               ylab = list("WB Unemployed", fontsize = 14, col="black"), ylab.right = list("WB Employed", fontsize = 14, col="black"))
+
+obj2 <- xyplot(WB.y ~ WEEK, mempcorr, type = "l", lwd = 2, col = '#0066CC')
+
+plot9 = doubleYScale(obj1, obj2, col = c('#FF3333', '#0066CC'), text = c("WB Unemployed", "WB Employed"), add.ylab2 = F)
+
+print(plot9)
+
+dev.off()
+
+
+```
+
+
+```{r}
+#M vs F differnces
+
+library(ggplot2)
+
+df = select(tbl, WEEK, ANYWORK, ANXIOUS, WORRY, DOWN, INTEREST, RSNNOWRKRV, RSNNOWRK, EGENDER, EGENID_BIRTH)
+
+df = df[!(df$ANXIOUS=="-99" | df$ANXIOUS=="-88" | df$DOWN=="-99" | df$DOWN=="-88" | df$WORRY=="-99"| df$WORRY=="-88" | df$ANYWORK=="-88" | df$ANYWORK=="-99" | df$INTEREST=="-88" | df$INTEREST=="-99"),]
+
+df$WB <- rowMeans(df[ , c(2,3,4,5)], na.rm=TRUE)
+
+df$covidue <- ifelse(df$RSNNOWRKRV %in% c(5,8,9,10,11) | df$RSNNOWRK %in% c(8,9,10,11), 1, 0)
+
+df$Gen <- ifelse(df$EGENDER %in% c(1) | df$EGENID_BIRTH %in% c(1), 1, 0)
+
+"idk why 1 is 0 and 0 is 1"
+
+emp = df[!(df$covidue=="1"),]
+
+empM = emp[!(emp$Gen=="0"),]
+
+empF = emp[!(emp$Gen=="1"),]
+
+uemp = df[!(df$covidue=="0"),]
+
+uempM = uemp[!(uemp$Gen=="0"),]
+
+uempF = uemp[!(uemp$Gen=="1"),]
+
+uempM = aggregate(uempM[, 11], list(uempM$WEEK), mean)
+
+empF = aggregate(empF[, 11], list(empF$WEEK), mean)
+
+uempF = aggregate(uempF[, 11], list(uempF$WEEK), mean)
+
+empM = aggregate(empM[, 11], list(empM$WEEK), mean)
+
+ggplot(uempF, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+ggplot(uempM, aes(x=Group.1, y=WB)) +
+  geom_line() + 
+  xlab("")
+
+mempF = merge(uempF, empF, by="Group.1")
+
+mempM = merge(uempM, empM, by="Group.1")
+
+mempF$diffF <- (mempF$WB.x - mempF$WB.y)
+
+mempM$diffM <- (mempM$WB.x - mempM$WB.y)
+
+colnames(mempF)[1] <- "WEEK"
+
+colnames(mempM)[1] <- "WEEK"
+
+ggplot(mempF, aes(x=WEEK, y=diffF)) +
+  geom_line() + 
+  xlab("")
+
+ggplot(mempM, aes(x=WEEK, y=diffM)) +
+  geom_line() + 
+  xlab("")
+
+
+
+uemp2 = df[!(df$covidue=="0"),]
+
+emp2 = df[!(df$covidue=="1"),]
+
+uemp2 = count(uemp2, WEEK)
+
+emp2 = count(emp2, WEEK)
+
+memp2 = merge(uemp2, emp2, by="WEEK")
+
+memp2$aggrate <- (memp2$n.x / memp2$n.y)
+
+ggplot(memp2, aes(x=WEEK, y=aggrate)) +
+  geom_line() + 
+  xlab("")
+
+colnames(memp2)[1] <- "WEEK"
+
+mempcorrF = merge(mempF, memp2, by="WEEK")
+
+mempcorrM = merge(mempM, memp2, by="WEEK")
+
+res <- cor.test(mempcorrF$aggrate, mempcorrF$diffF, 
+                    method = "pearson")
+res
+
+res <- cor.test(mempcorrM$aggrate, mempcorrM$diffM, 
+                    method = "pearson")
+res
+
+library(readxl)
+
+plot(mempcorrF$diffF ~ mempcorrF$aggrate) +
+abline(lm(mempcorrF$diffF ~ mempcorrF$aggrate))
+
+plot(mempcorrM$diffM ~ mempcorr$aggrate) +
+abline(lm(mempcorrM$diffM ~ mempcorrM$aggrate))
+
+plot(mempcorrM$diffM ~ mempcorrF$aggrate, col='Blue', ylim=c(.3,.75)) +
+points(mempcorrF$diffF ~ mempcorrM$aggrate, col='red') +
+  abline(lm(mempcorrF$diffF ~ mempcorrF$aggrate)) +
+  abline(lm(mempcorrM$diffM ~ mempcorrM$aggrate))
+
+
+
+```
+
+
+```{r}
+# regresion
+library(dplyr)
+
+df = select(tbl, WEEK, ANYWORK, ANXIOUS, WORRY, DOWN, INTEREST, RSNNOWRKRV, RSNNOWRK, EGENDER, EGENID_BIRTH, EST_ST, TBIRTH_YEAR)
+
+df = df[!(df$ANXIOUS=="-99" | df$ANXIOUS=="-88" | df$DOWN=="-99" | df$DOWN=="-88" | df$WORRY=="-99"| df$WORRY=="-88" | df$ANYWORK=="-88" | df$ANYWORK=="-99" | df$INTEREST=="-88" | df$INTEREST=="-99"),]
+
+df$WB <- rowMeans(df[ , c(2,3,4,5)], na.rm=TRUE)
+
+df$AGE = abs(df$TBIRTH_YEAR - 2022)
+
+#recalibration function 
+df$WB = abs(((as.numeric(as.character(df$WB)) -1)/ 3) -1)
+
+df$emp <- ifelse(df$RSNNOWRKRV %in% c(5,8,9,10,11) | df$RSNNOWRK %in% c(8,9,10,11), 1, 0)
+
+df<-df[!(df$RSNNOWRK %in% c(1,2,3,4,5,6,7)),]
+
+df<-df[!(df$RSNNOWRKRV %in% c(1,2,3,4,7)),]
+
+#EGENDER 1 is male 2 is female
+
+df$Gender <- ifelse(df$EGENDER %in% c(1) | df$EGENID_BIRTH %in% c(1), 1, 0)
+
+dfreg = merge(memp2, df, by="WEEK")
+
+
+lm0 = lm(WB ~ emp, data = dfreg)
+
+summary(lm0)
+
+lm1 = lm(WB ~ aggrate * emp, data = dfreg)
+
+summary(lm1)
+
+lm2 = lm(WB ~ aggrate*emp + Gender*emp, data = dfreg)
+
+summary(lm2)
+
+lm4 = lm(WB ~ Gender * aggrate * emp + AGE, data = dfreg) 
+
+summary(lm4)
+
+lm5 = lm(WB ~ Gender * aggrate * emp + emp * AGE, data = dfreg) 
+
+summary(lm5)
+
+
+lm6 = lm(WB ~ Gender * aggrate * emp + emp * AGE, data = dfreg) 
+
+plot10 = probe_interaction(lm6, pred = aggrate, modx = emp, mod2 = Gender, x.label = "Unemployment Rate", y.label = "Well-being", legend.main = "")
+          
+print(plot10)           
+           
+ggsave("plot10.png", device = "png",
+       width = 6, height = 4, units = "in", dpi = 1200)
+
+
+
+stargazer(lm0, lm1, lm2, lm4, lm5, title="Results", align=TRUE,  no.space=TRUE, omit.stat=c("f", "ser"), column.sep.width = "-15pt",font.size = "small")
+
+
+
+```
+
+```{r}
+
+uemp3 = df[!(df$emp=="0"),]
+
+emp3 = df[!(df$emp=="1"),]
+
+uemp3 = count(uemp3, WEEK, EST_ST)
+
+emp3 = count(emp3, WEEK, EST_ST)
+
+memp3 = merge(uemp3, emp3, by= c("EST_ST","WEEK"))
+
+memp3$locrate <- (memp3$n.x / memp3$n.y)
+
+library(ggplot2)
+library(data.table)
+
+dt1 = data.table(dfreg, key="WEEK")
+
+dt2 = data.table(memp3, key="WEEK")
+
+dfregstate = merge(dt1, dt2, by=c("WEEK","EST_ST"),allow.cartesian=TRUE)
+```
+
+```{r}
+
+
+
+lm0 = lm(WB ~ emp, data = dfregstate)
+
+summary(lm0)
+
+lm1 = lm(WB ~ locrate * emp, data = dfregstate)
+
+summary(lm1)
+
+lm2 = lm(WB ~ locrate*emp + Gender*emp, data = dfregstate)
+
+summary(lm2)
+
+lm4 = lm(WB ~ Gender * locrate * emp + AGE, data = dfregstate) 
+
+summary(lm4)
+
+lm5 = lm(WB ~ Gender * locrate * emp + emp * AGE, data = dfregstate) 
+
+summary(lm5)
+
+dfregstate$Gender = factor(dfregstate$Gender, labels = c("Female", "Male"))
+
+dfregstate$emp = factor(dfregstate$emp, labels = c("Employed", "Unemployed"))
+
+lm6 = lm(WB ~ Gender * locrate * emp + emp * AGE, data = dfregstate) 
+
+plot10 = probe_interaction(lm6, pred = locrate, modx = emp, mod2 = Gender, x.label = "Unemployment Rate", y.label = "Well-being", legend.main = "")
+          
+print(plot10)           
+           
+ggsave("plot10.png", device = "png",
+       width = 6, height = 4, units = "in", dpi = 1200)
+
+
+
+stargazer(lm0, lm1, lm2, lm4, lm5, title="Results", align=TRUE,  no.space=TRUE, omit.stat=c("f", "ser"), column.sep.width = "-15pt",font.size = "small")
+
+
+
+
+
+
+```
